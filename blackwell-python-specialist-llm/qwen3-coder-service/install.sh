@@ -4,6 +4,7 @@ set -e
 SERVICE_NAME="qwen3-coder"
 INSTALL_DIR="/opt/qwen3-coder-service"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+LLM_MODELS_DIR="/ssd/LLMs"
 
 echo "Installing Qwen3-Coder service..."
 
@@ -27,6 +28,17 @@ rm -f "$INSTALL_DIR/install.sh"  # Don't need install script in /opt
 
 # Update service file with correct path
 sed -i "s|WorkingDirectory=.*|WorkingDirectory=$INSTALL_DIR|" "$INSTALL_DIR/$SERVICE_NAME.service"
+
+# Configure LLM models path
+if [ -d "$LLM_MODELS_DIR" ]; then
+    echo "Found local LLM models at $LLM_MODELS_DIR, configuring..."
+    echo "LLM_MODELS_PATH=$LLM_MODELS_DIR" > "$INSTALL_DIR/.env"
+    echo "Models will be loaded from: $LLM_MODELS_DIR"
+else
+    echo "No local models found at $LLM_MODELS_DIR"
+    echo "Models will be downloaded to: $INSTALL_DIR/models"
+    mkdir -p "$INSTALL_DIR/models"
+fi
 
 # Install systemd service
 echo "Installing systemd service..."
