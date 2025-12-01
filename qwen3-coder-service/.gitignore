@@ -1,0 +1,18 @@
+# Model weights (large files)
+models/
+
+# Runtime data
+data/
+
+# Environment files with secrets
+.env
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+
+# IDE
+.idea/
+.vscode/
+*.swp

@@ -1,0 +1,80 @@
+services:
+  # Qwen3-Coder-30B-A3B vLLM Backend for Blackwell 7000 96GB
+  vllm-qwen3-coder:
+    image: vllm/vllm-openai:latest
+    container_name: vllm-qwen3-coder
+    environment:
+      NVIDIA_VISIBLE_DEVICES: "0"
+      HF_HOME: /models
+      VLLM_ATTENTION_BACKEND: FLASHINFER
+    volumes:
+      - ./models:/models
+      - ./data:/data
+    ports:
+      - "${VLLM_PORT:-8000}:8000"
+      - "9090:9090"  # Prometheus metrics
+    command:
+      - --model=Qwen/Qwen3-Coder-30B-A3B-Instruct-FP8
+      - --served-model-name=qwen3-coder-30b-a3b-fp8
+      - --port=8000
+      - --host=0.0.0.0
+      - --api-key=CNnviLUwYvqHNpR0TdRcdi6AhLnMO3U5cRkda-lHA3M
+      - --tensor-parallel-size=1
+      - --gpu-memory-utilization=0.92
+      - --max-num-seqs=16
+      - --max-num-batched-tokens=32768
+      - --enable-prefix-caching
+      - --trust-remote-code
+      - --dtype=auto
+      - --enable-chunked-prefill
+      - --max-model-len=32768
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              device_ids: ["0"]
+              capabilities: [gpu]
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 600s  # 10 minutes for model loading
+    restart: unless-stopped
+    networks:
+      - llm-network
+
+  # RemoteLLMconnector - Exposes vLLM to external broker
+  remotellm-connector:
+    build:
+      context: https://github.com/viljo/RemoteLLMconnector.git
+      dockerfile: Dockerfile.connector
+    container_name: remotellm-connector
+    depends_on:
+      vllm-qwen3-coder:
+        condition: service_healthy
+    environment:
+      REMOTELLM_LLM_URL: http://vllm-qwen3-coder:8000
+      REMOTELLM_LLM_API_KEY: CNnviLUwYvqHNpR0TdRcdi6AhLnMO3U5cRkda-lHA3M
+      REMOTELLM_BROKER_URL: wss://llm.viljo.se/ws
+      REMOTELLM_CONNECTOR_NAME: blackwell-qwen3-coder
+      REMOTELLM_CREDENTIALS_FILE: /data/credentials.yaml
+      REMOTELLM_LOG_LEVEL: INFO
+    volumes:
+      - ./data:/data
+    entrypoint: ["uv", "run", "remotellm-connector"]
+    command: ["--model", "qwen3-coder-30b-a3b-fp8"]
+    restart: unless-stopped
+    networks:
+      - llm-network
+
+networks:
+  llm-network:
+    driver: bridge
+
+volumes:
+  models:
+    driver: local
+  data:
+    driver: local
